@@ -1,0 +1,13 @@
+../Core/Src/Sensores/GPS.c:27:6:GPS_StartReceive	1
+../Core/Src/Sensores/GPS.c:34:6:GPS_InitData	1
+../Core/Src/Sensores/GPS.c:60:6:GPS_Init	1
+../Core/Src/Sensores/GPS.c:76:6:GPS_ProcessData	4
+../Core/Src/Sensores/GPS.c:111:6:GPS_ParseBuffer	8
+../Core/Src/Sensores/GPS.c:150:9:GPS_ValidateChecksum	4
+../Core/Src/Sensores/GPS.c:172:6:GPS_PrintRawSentence	1
+../Core/Src/Sensores/GPS.c:182:6:GPS_ParseNMEA	7
+../Core/Src/Sensores/GPS.c:204:6:GPS_ParseGGA	23
+../Core/Src/Sensores/GPS.c:279:6:GPS_ParseRMC	21
+../Core/Src/Sensores/GPS.c:351:6:GPS_ParseGSA	1
+../Core/Src/Sensores/GPS.c:361:7:GPS_ConvertToDecimalDegrees	3
+../Core/Src/Sensores/GPS.c:377:6:GPS_PrintData	2

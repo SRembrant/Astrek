@@ -1,0 +1,7 @@
+../Core/Src/Nav/Navegacion.c:27:6:init_navegacion	1
+../Core/Src/Nav/Navegacion.c:36:7:deg2rad	1
+../Core/Src/Nav/Navegacion.c:41:7:rad2deg	1
+../Core/Src/Nav/Navegacion.c:45:7:angle_diff	3
+../Core/Src/Nav/Navegacion.c:64:14:gpsACartesiano	1
+../Core/Src/Nav/Navegacion.c:102:7:distanciaNodos	1
+../Core/Src/Nav/Navegacion.c:129:6:navegacion_Task	13

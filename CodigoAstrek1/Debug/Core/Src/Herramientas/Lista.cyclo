@@ -1,0 +1,9 @@
+../Core/Src/Herramientas/Lista.c:14:6:inicializarLista	2
+../Core/Src/Herramientas/Lista.c:29:5:LPushBack	4
+../Core/Src/Herramientas/Lista.c:53:5:LPushFront	4
+../Core/Src/Herramientas/Lista.c:77:5:LRemove	7
+../Core/Src/Herramientas/Lista.c:114:8:LSearch	5
+../Core/Src/Herramientas/Lista.c:134:5:LGetAt	8
+../Core/Src/Herramientas/Lista.c:153:8:LpopFront	1
+../Core/Src/Herramientas/Lista.c:162:6:LClear	3
+../Core/Src/Herramientas/Lista.c:186:9:LSize	2

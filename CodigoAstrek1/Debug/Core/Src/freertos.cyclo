@@ -1,0 +1,9 @@
+../Core/Src/freertos.c:65:5:__io_putchar	1
+../Core/Src/freertos.c:209:6:MX_FREERTOS_Init	1
+../Core/Src/freertos.c:308:6:StartDefaultTask	1
+../Core/Src/freertos.c:326:6:ControlTask	2
+../Core/Src/freertos.c:369:13:UltrasonicTask	1
+../Core/Src/freertos.c:400:13:GPSTask	2
+../Core/Src/freertos.c:445:13:IMUTask	3
+../Core/Src/freertos.c:474:13:TransmisionTask	3
+../Core/Src/freertos.c:525:13:SensorsTask	1

@@ -1,0 +1,5 @@
+../Core/Src/Sensores/sr04.c:27:6:HCSR04_Init	1
+../Core/Src/Sensores/sr04.c:41:6:HCSR04_TriggerMeasurement	7
+../Core/Src/Sensores/sr04.c:58:13:HCSR04_ResetState	7
+../Core/Src/Sensores/sr04.c:72:19:HCSR04_ReadDistance	5
+../Core/Src/Sensores/sr04.c:114:6:HCSR04_InputCaptureCallback	15
