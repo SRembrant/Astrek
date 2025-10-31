@@ -1,0 +1,8 @@
+../Core/Src/Herramientas/HashMap.c:21:18:allocate_node	3
+../Core/Src/Herramientas/HashMap.c:36:13:free_node	2
+../Core/Src/Herramientas/HashMap.c:48:6:hashmap_init	4
+../Core/Src/Herramientas/HashMap.c:68:10:hash_function	1
+../Core/Src/Herramientas/HashMap.c:84:5:hashmap_put	5
+../Core/Src/Herramientas/HashMap.c:123:12:hashmap_get	4
+../Core/Src/Herramientas/HashMap.c:144:5:hashmap_remove	5
+../Core/Src/Herramientas/HashMap.c:173:9:hashmap_size	2
