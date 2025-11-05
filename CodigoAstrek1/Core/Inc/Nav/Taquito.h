@@ -11,12 +11,14 @@
 // --- Alfabeto de la maquina de estados ---
 
 typedef enum{
-	NUEVO_TAQUITO, //es el ajuste inicial
+	NUEVO_TAQUITO, //es el estado inicial
 	SEGUIMIENTO_PARED, //avanza en linea recta y hace ajustes pequeños
 	ESQUINA_INTERIOR,
 	ESQUINA_EXTERIOR,
 	CALLEJON_SIN_SALIDA,
-	ESTADO_DE_ESCAPE
+	ESTADO_DE_ESCAPE,
+	AVANCE,
+	AJUSTE
 }estado;
 
 void navTaquito_task(void *argument);

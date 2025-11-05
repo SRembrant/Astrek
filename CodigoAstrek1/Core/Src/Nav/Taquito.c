@@ -168,6 +168,27 @@ void navTaquito_task(void *argument){
 		Serial_PrintString("Nav taquito en ejecucion...");
 		switch(estadoTaq)
 		{
+			case AVANCE: //avanza en linea
+				status = osMessageQueueGet(sensorDataQueueHandle,&distancias/*&received_ultrasonic_data*/, NULL, osWaitForever);
+
+				if(status == osOK){
+					if(distancias.frontal < umbral_pared || distancias.frontal > umbral_grieta){
+						estadoTaq = NUEVO_TAQUITO;
+					}
+					else{
+						comunicacionControl_t.direccion = ROVER_FORWARD;
+						comunicacionControl_t.tiempo =100;
+						comunicacionControl_t.velocidad = 200;
+						status = osMessageQueuePut(controlDataQueueHandle, &comunicacionControl_t, 0, 10);
+						estadoTaq = AJUSTE;
+					}
+				}
+				break;
+			case AJUSTE:
+
+
+				estadoTaq = AVANCE;
+				break;
 			case NUEVO_TAQUITO:
 				status = osMessageQueueGet(gpsDataQueueHandle, &inicioTaquito, NULL, osWaitForever);
 				if(status==osOK){
@@ -374,6 +395,7 @@ void navTaquito_task(void *argument){
 
 		}
 
+		//Antes del if otro if verficando que este en ajuste o avance para no entrar a estado fin, fin
 		//revisamos si ya cruzamos o no la recta, mientras no la hayams cruzado, seguimos siguiendo la pared
 		status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
 		if(status==osOK){
