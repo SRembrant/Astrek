@@ -1,3 +1,4 @@
+
 /*
  * Navegacion.c
  *
@@ -12,7 +13,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
-
 #include "Navegacion.h"
 #include "GPS.h"
 #include "Serial.h"
