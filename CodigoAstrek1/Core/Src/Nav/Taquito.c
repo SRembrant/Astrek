@@ -12,18 +12,17 @@
 #include "cmsis_os.h"
 
 #include "Taquito.h"
-#include "Navegacion.h"
+#include "Navegacion.h" //libreria de funciones de navegacion
 #include "Serial.h"
 #include "sr04.h"
 
-// --- Funciones auxiliares ---
+// --- Funciones auxiliares (Propias de taquito) ---
 
 /*
  * @brief si el rover esta dentro de un intervalo permitido, no hace ajustes de pared
  * 	      de estar muy lejos o muy cerca, regresa al intervalo permitido
  * @return 0 para rango permitido, 1 para muy cerca, 2 para muy lejos
  */
-
 static float hayPared(float disLateral){
 	//float distancia_medida;
 	float rangoPosicionMin, rangoPosicionMax;
@@ -47,7 +46,6 @@ static float hayPared(float disLateral){
  * @param direccion Es un valor -1 o 1, indica que pared esta siguiendo el rover
  *                  1 para la pared izquierda, -1 para la pared derecha
  */
-
 static void ajustarPared(int8_t direccion, float disLateral){
 	//validamos si estamos siguiendo una pared o una grieta
 	if(disLateral>=umbral_grieta) return; // si es una grieta, no hay como hacer ajustes
@@ -109,6 +107,14 @@ static float distanciaARecta(GPS_Data_t * posActual, GPS_Data_t * origen, GPS_Da
 }
 */
 
+/**
+ * @brief determina si se ha cruzado la linea recta que pasa entre la estacion terrena y el lugar donde empezo a ejecutarse taquito
+ * @param posActual es la posicion actual del rover
+ * @param origen es la posicion GPS donde se empezo a ejecutar taquito
+ * @param estacionTerrena es la posicion GPS donde se ubica la estacion terrena
+ * @param paredASeguir indica que lado de la pared se estaba siguiendo, es -1 o 1. Se valida que el valor calculado sea el contrario al recibido aqui
+ * @return vedadero si se cruzo la linea, falso en caso contrario
+ */
 static bool validarCruceRecta(GPS_Data_t * posActual, GPS_Data_t * origen, GPS_Data_t * estacionTerrena, int8_t paredASeguir){
 
 	//P_Cartesiano origenPlano;
@@ -141,6 +147,7 @@ static bool validarCruceRecta(GPS_Data_t * posActual, GPS_Data_t * origen, GPS_D
  */
 void navTaquito_task(void *argument){
 	//creacion de variables a usar
+
 		//variables de la logica de taquito
 		static GPS_Data_t inicioTaquito, posActual, anteriorTaquito;
 		static float  distRecta, disNodosTaq, disLateral;
@@ -160,15 +167,19 @@ void navTaquito_task(void *argument){
 		static Lista pilaNodosTaquito;
 		static HashMap map;
 
-
 		inicializarLista(&pilaNodosTaquito);
 		hashmap_init(&map);
+
+		//variables de la maquina de estados avance / ajuste
+		float bearing; //bearing desde la posicion actual a la estacion terrena
+		float heading; //heading del rover respecto al norte
+		float diff; //diferencia entre el bearing y el heading
 
 	for(;;){
 		Serial_PrintString("Nav taquito en ejecucion...");
 		switch(estadoTaq)
 		{
-			case AVANCE: //avanza en linea
+			case AVANCE: //avanza en linea recta
 				status = osMessageQueueGet(sensorDataQueueHandle,&distancias/*&received_ultrasonic_data*/, NULL, osWaitForever);
 
 				if(status == osOK){
@@ -185,7 +196,34 @@ void navTaquito_task(void *argument){
 				}
 				break;
 			case AJUSTE:
+				/*Aqui hay que mirar con los codigos nuevos como se recibe el heading. Para determiinar como hacer el algoritmo
+				 *
+				 *
+				 * si alguna de las dos lecturas, gps o headig, es invalida, solo sigue avanzando
+				 * solo hace calculos de ajuste cuando Bearing y Heading son valores validos. El detalle esta
+				 * en evitar que haga calculos si alguna de esas dos variables no se pudo calcular
+				 *
+				 * algoriitmo de ajuste
+				 *
+				 * 1. calcula bearing
+				 * 2. calcula heading
+				 * 3. calcula diff
+				 * 4 si diff > a angle-tolerance hacer
+				 * 		4.1 comandos a control para ajustar el rumbo
+				 * 	 finsi
+				 * 5. estado = AVANCE
+				 * */
 
+				status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
+				if(status == osOK)
+				{
+					bearing = calculate_bearing(&posActual, estacionTerrena); //calculamos el bearing
+				}
+				//recibir datos del IMU para el heading o del GPS con el campo course y repetir el if anterior
+				if(status == osOK)
+				{
+					//se puede continuar
+				}
 
 				estadoTaq = AVANCE;
 				break;
@@ -391,27 +429,31 @@ void navTaquito_task(void *argument){
 				osThreadResume(navegacionHandle);
 				osThreadSuspend(osThreadGetId());
 				break;
-
-
 		}
 
 		//Antes del if otro if verficando que este en ajuste o avance para no entrar a estado fin, fin
-		//revisamos si ya cruzamos o no la recta, mientras no la hayams cruzado, seguimos siguiendo la pared
-		status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
-		if(status==osOK){
-//			distRecta = distanciaARecta(&posActual, &inicioTaquito ,estacionTerrena);
-			bool cruce = validarCruceRecta(&posActual, &inicioTaquito ,estacionTerrena, paredASeguir);
-			if(cruce){
-				//la proxima ejecucion de taquito se reinicia el algoritmo
-				estadoTaq = NUEVO_TAQUITO;
-				//comunicamos con el selector que se completo taquito correctamente
-				evento = OBSTACULO_RODEADO;
-				osMessageQueuePut(navStatesQueueHandle,&evento, 0, 0);
-				//le cedemos el control al selector
-				osThreadResume(navegacionHandle);
-				osThreadSuspend(osThreadGetId());
+		if(estadoTaq != AVANCE && estadoTaq != AJUSTE)
+		{
+			//revisamos si ya cruzamos o no la recta, mientras no la hayams cruzado, seguimos siguiendo la pared
+			status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
+			if(status==osOK)
+			{
+	//			distRecta = distanciaARecta(&posActual, &inicioTaquito ,estacionTerrena);
+				bool cruce = validarCruceRecta(&posActual, &inicioTaquito ,estacionTerrena, paredASeguir);
+				if(cruce)
+				{
+					//la proxima ejecucion de taquito se reinicia el algoritmo
+					estadoTaq = NUEVO_TAQUITO;
+					//comunicamos con el selector que se completo taquito correctamente
+					evento = OBSTACULO_RODEADO;
+					osMessageQueuePut(navStatesQueueHandle,&evento, 0, 0);
+					//le cedemos el control al selector
+					osThreadResume(navegacionHandle);
+					osThreadSuspend(osThreadGetId());
+				}
 			}
 		}
+
 	/*	//medir stakkk
 
 		uint32_t free_words = osThreadGetStackSpace(osThreadGetId()); // stack libre en "words" (4 bytes)
