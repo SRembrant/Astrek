@@ -116,6 +116,28 @@ float distanciaNodos(GPS_Data_t* nodo1, GPS_Data_t* nodo2){
     return distance;
 }
 
+/*
+ * @brief Esta funcion calcula el rumbo (en grados) que debe seguir el rover para alcanzar una posicion GPS de destino
+ * 		  parte de la trignometria esferica y el concepto de rumbo en nautica y aeronautica, que se mide desde el norte del meridiano
+ * 		  actual hacia el este. Se hacen calculos siguiendo la ortodromica (distancia mas corta entre dos puntos sobre una esfera).
+ * @param current -> es la posicion GPS donde se encuentra actualmente
+ * @param target -> es la posicion GPS de destino
+ * @return Valor en grados del rumbo
+ */
+
+float calculate_bearing(GPS_Data_t* current, GPS_Data_t *target) {
+    float lat1 = deg2rad(current->latitude);
+    float lat2 = deg2rad(target->latitude);
+    float dLon = deg2rad(target->longitude - current->longitude);
+
+    float y = sinf(dLon) * cosf(lat2);
+    float x = cosf(lat1) * sinf(lat2) - sinf(lat1) * cosf(lat2) * cosf(dLon);
+
+    float bearing = atan2f(y, x);
+    bearing = rad2deg(bearing);
+    return fmodf((bearing + 360.0f), 360.0f);  // Normaliza a [0, 360)
+}
+
 
 /**
  * @brief vTask de navegacion, funciona como una maquina de estados finitos para ejecutar el

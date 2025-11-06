@@ -83,11 +83,17 @@ float deg2rad(float deg);
 //radianes a grados
 float rad2deg(float rad);
 
+//calcula la menor diferencia entre dos angulos
 float angle_diff(float a, float b);
+
 // coordenadas GPS a plano cartesiano local (Y - Norte, X - este)
 P_Cartesiano gpsACartesiano(GPS_Data_t * origin, GPS_Data_t *target);
+
 // distancia entre dos posiciones GPS
 float distanciaNodos(GPS_Data_t* nodo1, GPS_Data_t* nodo2);
+
+//calculo del bearing entre actual y un target objetivo
+float calculate_bearing(GPS_Data_t* current, GPS_Data_t *target);
 
 // -- TAREA DE NAVEGACION (Maquina de estados) --
 void navegacion_Task(void *argument);

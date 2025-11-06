@@ -32,7 +32,7 @@
 #include "sr04.h"
 
 #include "Navegacion.h"
-#include "NavGlobal.h"
+//#include "NavGlobal.h"
 #include "Taquito.h"
 
 #include "usart.h"
@@ -76,12 +76,14 @@ const osThreadAttr_t defaultTask_attributes = {
 };
 
 /*creation for Navegacion*/
+/*
 osThreadId_t navegacionHandle;
 const osThreadAttr_t navegacion_attributes = {
   .name = "navegacion",
   .stack_size = 144 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
+*/
 
 /*creation for Taquito*/
 osThreadId_t taquitoHandle;
@@ -92,12 +94,14 @@ const osThreadAttr_t taquito_attributes = {
 };
 
 /*creation for NavGlobal*/
+/*
 osThreadId_t navGlobalHandle;
 const osThreadAttr_t navGlobal_attributes = {
   .name = "navGlobal",
   .stack_size = 323 * 4, //estaba en 323
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
+*/
 
 /* Definitions for Control */
 osThreadId_t ControlHandle;
@@ -148,12 +152,14 @@ osMessageQueueId_t controlDataQueueHandle;
 const osMessageQueueAttr_t controlDataQueue_attributes = {
   .name = "controlDataQueue"
 };
+
 /*Definitions for navigationStatesQueue*/
+/*
 osMessageQueueId_t navStatesQueueHandle;
 const osMessageQueueAttr_t navStatesQueue_attributes = {
   .name = "navStatesQueue"
 };
-
+*/
 
 /* Definitions for sensorDataQueue */
 osMessageQueueId_t sensorDataQueueHandle;
@@ -247,7 +253,7 @@ void MX_FREERTOS_Init(void) {
   controlDataQueueHandle = osMessageQueueNew(5, sizeof(control_command), &controlDataQueue_attributes);
 
   /* creation of navStatesQueue*/
-  navStatesQueueHandle = osMessageQueueNew(5, sizeof(evento_navegacion), &navStatesQueue_attributes);
+ // navStatesQueueHandle = osMessageQueueNew(5, sizeof(evento_navegacion), &navStatesQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
@@ -258,31 +264,31 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* creation of Control */
-//  ControlHandle = osThreadNew(ControlTask, NULL, &Control_attributes);
+  ControlHandle = osThreadNew(ControlTask, NULL, &Control_attributes);
 
   /* creation of Ultrasonido */
-//  UltrasonidoHandle = osThreadNew(UltrasonicTask, NULL, &Ultrasonido_attributes);
+  UltrasonidoHandle = osThreadNew(UltrasonicTask, NULL, &Ultrasonido_attributes);
 
   /* creation of Geoposicion */
   GeoposicionHandle = osThreadNew(GPSTask, NULL, &Geoposicion_attributes);
 
   /* creation of IMU */
-//  IMUHandle = osThreadNew(IMUTask, NULL, &IMU_attributes);
+  IMUHandle = osThreadNew(IMUTask, NULL, &IMU_attributes);
 
   /* creation of Transmision */
-//  TransmisionHandle = osThreadNew(TransmisionTask, NULL, &Transmision_attributes);
+  TransmisionHandle = osThreadNew(TransmisionTask, NULL, &Transmision_attributes);
 
   /* creation of Sensores_I2C */
-//  Sensores_I2CHandle = osThreadNew(SensorsTask, NULL, &Sensores_I2C_attributes);
+  Sensores_I2CHandle = osThreadNew(SensorsTask, NULL, &Sensores_I2C_attributes);
 
   /*creation of Navegacion*/
  // navegacionHandle = osThreadNew(navegacion_Task,NULL,&navegacion_attributes);
 
   /*creation of NavGlobal*/
-  navGlobalHandle = osThreadNew(navGlobal_task,NULL,&navGlobal_attributes);
+  //navGlobalHandle = osThreadNew(navGlobal_task,NULL,&navGlobal_attributes);
 
   /*creation of Taquito*/
- // taquitoHandle = osThreadNew(navTaquito_task,NULL,&taquito_attributes);
+  taquitoHandle = osThreadNew(navTaquito_task,NULL,&taquito_attributes);
 
 
 
