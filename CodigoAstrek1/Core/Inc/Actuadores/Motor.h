@@ -1,34 +1,51 @@
 /*
- * Motor.h
+ * Control_Rover.c
  *
  *  Created on: Jul 16, 2025
  *      Author: EdamVelas
  */
+#include "Control_Rover.h"
+#include "Motor.h"
 
-#ifndef INC_ACTUADORES_MOTOR_H_
-#define INC_ACTUADORES_MOTOR_H_
-
-#include "stm32f4xx_hal.h"
-#include "tim.h"
-
-// Uso hecho para el driver DRV8833
-typedef struct
+void Rover_Move(Rover_Config *rover, Rover_Direccion direction, uint16_t speed , uint32_t tiempo)
 {
-	TIM_HandleTypeDef* pwm_timer;      // Timer para PWM
-	uint32_t pwm_channel_IN1;          // AIN1 y BIN1
-	uint32_t pwm_channel_IN2;          // AIN2 y BIN2
-} Motor_Config;
+	if (speed>1000) speed =1000;
 
-typedef enum
-{
-	MOTOR_ADELANTE, // Hace que el motor vaya hacia adelante
-	MOTOR_ATRAS,    // Hace que el motor vaya hacia atrás
-	MOTOR_PARAR,    // Hace que el motor frene activamente
-	MOTOR_NEUTRO    // Hace que el motor esté en neutro
-}Motor_Movement;
+    switch (direction) {
+        case ROVER_FORWARD:
+        	// La logica del motor derecho es la contraria al izquierdo
+            Motor_SetMovement(&rover->f_left_motor, MOTOR_ATRAS, speed);   // Se mueve hacia adelante
+            Motor_SetMovement(&rover->f_right_motor, MOTOR_ADELANTE, speed);  // Se mueve hacia adelante
+            Motor_SetMovement(&rover->b_left_motor, MOTOR_ADELANTE, speed);   // Se mueve hacia adelante
+            Motor_SetMovement(&rover->b_right_motor, MOTOR_ADELANTE, speed);  // Se mueve hacia adelante
+            break;
+        case ROVER_BACKWARD:
+        	Motor_SetMovement(&rover->f_left_motor, MOTOR_ADELANTE, speed );     // Se mueve hacia atras
+        	Motor_SetMovement(&rover->f_right_motor, MOTOR_ATRAS, speed); // Se mueve hacia atras
+          	Motor_SetMovement(&rover->b_left_motor, MOTOR_ATRAS, speed );     // Se mueve hacia atras
+            Motor_SetMovement(&rover->b_right_motor, MOTOR_ATRAS, speed); // Se mueve hacia atras
+        	break;
+        case ROVER_LEFT:
+        	Motor_SetMovement(&rover->f_left_motor, MOTOR_ATRAS, speed);      // Se mueve hacia atras
+        	Motor_SetMovement(&rover->f_right_motor, MOTOR_ADELANTE, speed);  // Se mueve hacia adelante
+        	Motor_SetMovement(&rover->b_left_motor, MOTOR_NEUTRO, speed);     // Neutro
+        	Motor_SetMovement(&rover->b_right_motor, MOTOR_NEUTRO, speed);    // Neutro
+            break;
+        case ROVER_RIGHT:
+        	Motor_SetMovement(&rover->f_left_motor, MOTOR_ADELANTE, speed);   // Se mueve hacia adelante
+        	Motor_SetMovement(&rover->f_right_motor, MOTOR_ATRAS, speed);     // Se mueve hacia atrás
+        	Motor_SetMovement(&rover->b_left_motor, MOTOR_NEUTRO, speed);     // Neutro
+        	Motor_SetMovement(&rover->b_right_motor, MOTOR_NEUTRO, speed);    // Neutro
+            break;
+        case ROVER_STOP:
+        	Motor_SetMovement(&rover->f_left_motor, MOTOR_PARAR, speed); // speed es irrelevante en este caso
+        	Motor_SetMovement(&rover->f_right_motor, MOTOR_PARAR, speed);
+        	Motor_SetMovement(&rover->b_left_motor, MOTOR_PARAR, speed);
+        	Motor_SetMovement(&rover->b_right_motor, MOTOR_PARAR, speed);
+    break;
+    }
+    osDelay(tiempo);
+}
 
-// Prototipos de funciones
-void Motor_SetMovement(Motor_Config *motor,Motor_Movement Movimiento, uint16_t speed);  // Setea el movimiento del motor
 
 
-#endif /* INC_ACTUADORES_MOTOR_H_ */

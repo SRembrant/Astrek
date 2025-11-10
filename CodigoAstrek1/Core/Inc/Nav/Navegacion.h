@@ -17,9 +17,9 @@
 extern GPS_Data_t * estacionTerrena;
 
 // -- HANDLES GLOBALES --
-extern osThreadId_t navGlobalHandle;
+//extern osThreadId_t navGlobalHandle;
 extern osThreadId_t taquitoHandle;
-extern osThreadId_t navegacionHandle;
+//extern osThreadId_t navegacionHandle;
 
 // -- COLAS DE TAREAS --
 	//colas de sensores
@@ -27,7 +27,7 @@ extern osMessageQueueId_t gpsDataQueueHandle;
 extern osMessageQueueId_t sensorDataQueueHandle;
 	//colas de navegacion
 extern osMessageQueueId_t controlDataQueueHandle;
-extern osMessageQueueId_t navStatesQueueHandle;
+//extern osMessageQueueId_t navStatesQueueHandle;
 
 // -- CONSTANTES DEL SISTEMA --
 #define EARTH_RADIUS 6371000.0f // Radio de la Tierra en metros

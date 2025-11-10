@@ -29,12 +29,24 @@ typedef struct {
     Motor_Config b_right_motor; // Motor derecho de atras
 } Rover_Config;
 
-//estructura para comunicacion con control
-typedef struct{
-	Rover_Direccion direccion;
-	uint16_t velocidad;
-	uint32_t tiempo;
-}control_command;
+// Tipos de comando que Taquito puede enviar
+typedef enum {
+    MODE_POSE_TARGET,   // Ir a un (X, Y) fijo (comportamiento actual en ControlTask)
+    MODE_WALL_FOLLOW,   // Moverse con vx y corrección wz (Nuevo modo para Taquito)
+    MODE_POSE_GIRO      // Giro de 90 grados (Theta Target)
+} Rover_Control_Mode_t;
+
+// Estructura de comunicación ampliada
+typedef struct {
+    Rover_Control_Mode_t mode;  // El modo de operación
+    float target_vx;            // Velocidad lineal deseada (para Wall Follow)
+    float target_wz;            // Velocidad angular deseada (para giros puros o Wall Follow)
+    float target_x;             // X objetivo (para Pose Target o Giro)
+    float target_y;             // Y objetivo (para Pose Target o Giro)
+    float target_theta;         // Theta objetivo (para Giro de 90 grados)
+    float distance_cm;          // Distancia lateral (solo relevante para Wall Follow)
+    int8_t wall_direction;      // Dirección de pared (1 o -1)
+} ControlCommand_t;
 
 //Funciones a usar
 void Rover_Init(Rover_Config *Rover); //Inicializa el movimiento del Rover

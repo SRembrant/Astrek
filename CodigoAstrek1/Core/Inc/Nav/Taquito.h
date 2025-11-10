@@ -8,6 +8,7 @@
 #ifndef INC_NAV_TAQUITO_H_
 #define INC_NAV_TAQUITO_H_
 
+#define WALL_FOLLOW_VX_BASE     0.3f // Velocidad de avance para wall-following [m/s]
 // --- Alfabeto de la maquina de estados ---
 
 typedef enum{
@@ -20,6 +21,11 @@ typedef enum{
 	AVANCE,
 	AJUSTE
 }estado;
+
+
+
+
+
 
 void navTaquito_task(void *argument);
 
