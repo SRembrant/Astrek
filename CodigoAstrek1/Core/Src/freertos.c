@@ -475,7 +475,7 @@ void ControlTask(void *argument)
         // 5. Cinemática inversa
         WheelVelocities_t wheels = Kinematics_Inverse(vx_cmd,
                                                       wz_cmd);
-
+///
         // 6. Modelo PWM
         PWM_Mapping_t pwm_right = PWM_VelocityToPWM(wheels.vR_cmd, 1);
         PWM_Mapping_t pwm_left = PWM_VelocityToPWM(wheels.vL_cmd, 0);
