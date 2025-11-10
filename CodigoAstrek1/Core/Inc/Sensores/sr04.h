@@ -41,6 +41,7 @@ void HCSR04_Init(HCSR04_Config_t* config);
 HAL_StatusTypeDef HCSR04_ReadDistance(HCSR04_Data_t* data);
 void HCSR04_TriggerMeasurement(void);
 void HCSR04_InputCaptureCallback(TIM_HandleTypeDef* htim);
+void HCSR04_TimerOverflowCallback(TIM_HandleTypeDef* htim);
 
 // Variables externas
 extern HCSR04_Data_t g_hcsr04_data;

@@ -1,18 +1,8 @@
 /* USER CODE BEGIN Header */
 /**
  ******************************************************************************
- * File Name          : freertos.c
+ * File Name          : freertos.c (VERSIÓN CORREGIDA)
  * Description        : Code for freertos applications
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2025 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
  ******************************************************************************
  */
 /* USER CODE END Header */
@@ -25,7 +15,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "Control_Rover.h"
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include "GPS.h"
 #include "IMU.h"
 #include "Serial.h"
@@ -40,6 +32,15 @@
 
 #include <string.h>
 #include <stdio.h>
+
+#include "Control_Rover.h"
+#include "Control_Pose.h"
+#include "Control_Kinematics.h"
+#include "Control_PWM.h"
+
+#include "Sensors_I2C.h"
+#include "LoRa_RYLR998.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,263 +64,325 @@ extern MPU9250_Data IMU_Data;
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 int __io_putchar(int ch) {
-    HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY); // usa el UART que tengas
-    return ch;
+	HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+	return ch;
 }
+
+uint32_t raw_light_debug = 0;
+static PoseController_t pose_controller;
+static PWM_Compensation_t pwm_compensation;
+static uint8_t control_initialized = 0;
+
 /* USER CODE END Variables */
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+/* Definitions for Navegacion */
+osThreadId_t NavegacionHandle;
+const osThreadAttr_t Navegacion_attributes = {
+		.name = "Navegacion",
+		.stack_size = 144 * 4,
+		.priority = (osPriority_t) osPriorityAboveNormal,
 };
-
-/*creation for Navegacion*/
-/*
-osThreadId_t navegacionHandle;
-const osThreadAttr_t navegacion_attributes = {
-  .name = "navegacion",
-  .stack_size = 144 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal,
+/* Definitions for Taquito */
+osThreadId_t TaquitoHandle;
+const osThreadAttr_t Taquito_attributes = {
+		.name = "Taquito",
+		.stack_size = 311 * 4,
+		.priority = (osPriority_t) osPriorityNormal,
 };
-*/
-
-/*creation for Taquito*/
-osThreadId_t taquitoHandle;
-const osThreadAttr_t taquito_attributes = {
-  .name = "taquito",
-  .stack_size = 311 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+/* Definitions for NavGlobal */
+osThreadId_t NavGlobalHandle;
+const osThreadAttr_t NavGlobal_attributes = {
+		.name = "NavGlobal",
+		.stack_size = 323 * 4,
+		.priority = (osPriority_t) osPriorityBelowNormal1,
 };
-
-/*creation for NavGlobal*/
-/*
-osThreadId_t navGlobalHandle;
-const osThreadAttr_t navGlobal_attributes = {
-  .name = "navGlobal",
-  .stack_size = 323 * 4, //estaba en 323
-  .priority = (osPriority_t) osPriorityBelowNormal,
-};
-*/
-
 /* Definitions for Control */
 osThreadId_t ControlHandle;
 const osThreadAttr_t Control_attributes = {
-  .name = "Control",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityRealtime,
+		.name = "Control",
+		.stack_size = 128 * 4,
+		.priority = (osPriority_t) osPriorityRealtime,
 };
 /* Definitions for Ultrasonido */
 osThreadId_t UltrasonidoHandle;
 const osThreadAttr_t Ultrasonido_attributes = {
-  .name = "Ultrasonido",
-  .stack_size = 210 * 4,
-  .priority = (osPriority_t) osPriorityBelowNormal,
+		.name = "Ultrasonido",
+		.stack_size = 210 * 4,
+		.priority = (osPriority_t) osPriorityBelowNormal2,
 };
 /* Definitions for Geoposicion */
 osThreadId_t GeoposicionHandle;
 const osThreadAttr_t Geoposicion_attributes = {
-  .name = "Geoposicion",
-  .stack_size = 210 * 4, //estaba en 210
-  .priority = (osPriority_t) osPriorityNormal1,
-};
-/* Definitions for IMU */
-osThreadId_t IMUHandle;
-const osThreadAttr_t IMU_attributes = {
-  .name = "IMU",
-  .stack_size = 182 * 4,
-  .priority = (osPriority_t) osPriorityBelowNormal2,
+		.name = "Geoposicion",
+		.stack_size = 210 * 4,
+		.priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Transmision */
 osThreadId_t TransmisionHandle;
 const osThreadAttr_t Transmision_attributes = {
-  .name = "Transmision",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+		.name = "Transmision",
+		.stack_size = 512 * 4,
+		.priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for Sensores_I2C */
 osThreadId_t Sensores_I2CHandle;
 const osThreadAttr_t Sensores_I2C_attributes = {
-  .name = "Sensores_I2C",
-  .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityBelowNormal,
+		.name = "Sensores_I2C",
+		.stack_size = 512 * 4,
+		.priority = (osPriority_t) osPriorityBelowNormal,
 };
-
-
-/* Definitions for controlDataQueue */
-osMessageQueueId_t controlDataQueueHandle;
-const osMessageQueueAttr_t controlDataQueue_attributes = {
-  .name = "controlDataQueue"
-};
-
-/*Definitions for navigationStatesQueue*/
-/*
-osMessageQueueId_t navStatesQueueHandle;
-const osMessageQueueAttr_t navStatesQueue_attributes = {
-  .name = "navStatesQueue"
-};
-*/
-
 /* Definitions for sensorDataQueue */
 osMessageQueueId_t sensorDataQueueHandle;
 const osMessageQueueAttr_t sensorDataQueue_attributes = {
-  .name = "sensorDataQueue"
+		.name = "sensorDataQueue"
 };
 /* Definitions for gpsDataQueue */
 osMessageQueueId_t gpsDataQueueHandle;
 const osMessageQueueAttr_t gpsDataQueue_attributes = {
-  .name = "gpsDataQueue"
+		.name = "gpsDataQueue"
 };
-/* Definitions for imuDataQueue */
-osMessageQueueId_t imuDataQueueHandle;
-const osMessageQueueAttr_t imuDataQueue_attributes = {
-  .name = "imuDataQueue"
+/* Definitions for controlDataQueue */
+osMessageQueueId_t controlDataQueueHandle;
+const osMessageQueueAttr_t controlDataQueue_attributes = {
+		.name = "controlDataQueue"
+};
+/* Definitions for navStatesQueue */
+osMessageQueueId_t navStatesQueueHandle;
+const osMessageQueueAttr_t navStatesQueue_attributes = {
+		.name = "navStatesQueue"
+};
+/* Definitions for hcsr04DataQueue */
+osMessageQueueId_t hcsr04DataQueueHandle;
+const osMessageQueueAttr_t hcsr04DataQueue_attributes = {
+		.name = "hcsr04DataQueue"
 };
 /* Definitions for hcsr04Semaphore */
 osSemaphoreId_t hcsr04SemaphoreHandle;
 const osSemaphoreAttr_t hcsr04Semaphore_attributes = {
-  .name = "hcsr04Semaphore"
+		.name = "hcsr04Semaphore"
 };
 /* Definitions for serialSemaphore */
 osSemaphoreId_t serialSemaphoreHandle;
 const osSemaphoreAttr_t serialSemaphore_attributes = {
-  .name = "serialSemaphore"
+		.name = "serialSemaphore"
 };
 /* Definitions for imuSemaphore */
 osSemaphoreId_t imuSemaphoreHandle;
 const osSemaphoreAttr_t imuSemaphore_attributes = {
-  .name = "imuSemaphore"
+		.name = "imuSemaphore"
 };
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
+void Rover_SetPWM_Differential(Rover_Config *rover, PWM_Commands_t commands)
+{
+	// ========== MOTORES DERECHOS ==========
+	if (commands.dir_right == 0) {
+		__HAL_TIM_SET_COMPARE(rover->f_right_motor.pwm_timer,
+				rover->f_right_motor.pwm_channel_IN1,
+				commands.pwm_right);
+		__HAL_TIM_SET_COMPARE(rover->f_right_motor.pwm_timer,
+				rover->f_right_motor.pwm_channel_IN2, 0);
+
+		__HAL_TIM_SET_COMPARE(rover->b_right_motor.pwm_timer,
+				rover->b_right_motor.pwm_channel_IN1,
+				commands.pwm_right);
+		__HAL_TIM_SET_COMPARE(rover->b_right_motor.pwm_timer,
+				rover->b_right_motor.pwm_channel_IN2, 0);
+	} else {
+		__HAL_TIM_SET_COMPARE(rover->f_right_motor.pwm_timer,
+				rover->f_right_motor.pwm_channel_IN1, 0);
+		__HAL_TIM_SET_COMPARE(rover->f_right_motor.pwm_timer,
+				rover->f_right_motor.pwm_channel_IN2,
+				commands.pwm_right);
+
+		__HAL_TIM_SET_COMPARE(rover->b_right_motor.pwm_timer,
+				rover->b_right_motor.pwm_channel_IN1, 0);
+		__HAL_TIM_SET_COMPARE(rover->b_right_motor.pwm_timer,
+				rover->b_right_motor.pwm_channel_IN2,
+				commands.pwm_right);
+	}
+
+	// ========== MOTORES IZQUIERDOS ==========
+	if (commands.dir_left == 0) {
+		__HAL_TIM_SET_COMPARE(rover->f_left_motor.pwm_timer,
+				rover->f_left_motor.pwm_channel_IN1,
+				commands.pwm_left);
+		__HAL_TIM_SET_COMPARE(rover->f_left_motor.pwm_timer,
+				rover->f_left_motor.pwm_channel_IN2, 0);
+
+		__HAL_TIM_SET_COMPARE(rover->b_left_motor.pwm_timer,
+				rover->b_left_motor.pwm_channel_IN1,
+				commands.pwm_left);
+		__HAL_TIM_SET_COMPARE(rover->b_left_motor.pwm_timer,
+				rover->b_left_motor.pwm_channel_IN2, 0);
+	} else {
+		__HAL_TIM_SET_COMPARE(rover->f_left_motor.pwm_timer,
+				rover->f_left_motor.pwm_channel_IN1, 0);
+		__HAL_TIM_SET_COMPARE(rover->f_left_motor.pwm_timer,
+				rover->f_left_motor.pwm_channel_IN2,
+				commands.pwm_left);
+
+		__HAL_TIM_SET_COMPARE(rover->b_left_motor.pwm_timer,
+				rover->b_left_motor.pwm_channel_IN1, 0);
+		__HAL_TIM_SET_COMPARE(rover->b_left_motor.pwm_timer,
+				rover->b_left_motor.pwm_channel_IN2,
+				commands.pwm_left);
+	}
+}
+
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void *argument);
+void NavegacionTask(void *argument);
+void TaquitoTask(void *argument);
+void Navegacion_Global(void *argument);
 void ControlTask(void *argument);
-void UltrasonicTask(void *argument);
+void UltrasonidoTask(void *argument);
 void GPSTask(void *argument);
-void IMUTask(void *argument);
 void TransmisionTask(void *argument);
-void SensorsTask(void *argument);
+void SensoresTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /**
-  * @brief  FreeRTOS initialization
-  * @param  None
-  * @retval None
-  */
+ * @brief  FreeRTOS initialization
+ * @param  None
+ * @retval None
+ */
 void MX_FREERTOS_Init(void) {
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* USER CODE BEGIN RTOS_MUTEX */
+	/* USER CODE BEGIN RTOS_MUTEX */
 	/* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
+	/* USER CODE END RTOS_MUTEX */
 
-  /* Create the semaphores(s) */
-  /* creation of hcsr04Semaphore */
-  hcsr04SemaphoreHandle = osSemaphoreNew(1, 1, &hcsr04Semaphore_attributes);
+	/* Create the semaphores(s) */
+	/* creation of hcsr04Semaphore */
+	hcsr04SemaphoreHandle = osSemaphoreNew(1, 0, &hcsr04Semaphore_attributes);
 
-  /* creation of serialSemaphore */
-  serialSemaphoreHandle = osSemaphoreNew(1, 1, &serialSemaphore_attributes);
+	/* creation of serialSemaphore */
+	serialSemaphoreHandle = osSemaphoreNew(1, 1, &serialSemaphore_attributes);
 
-  /* creation of imuSemaphore */
-  imuSemaphoreHandle = osSemaphoreNew(1, 1, &imuSemaphore_attributes);
+	/* creation of imuSemaphore */
+	imuSemaphoreHandle = osSemaphoreNew(1, 1, &imuSemaphore_attributes);
 
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
+	/* USER CODE BEGIN RTOS_SEMAPHORES */
 	/* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
+	/* USER CODE END RTOS_SEMAPHORES */
 
-  /* USER CODE BEGIN RTOS_TIMERS */
+	/* USER CODE BEGIN RTOS_TIMERS */
 	/* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
+	/* USER CODE END RTOS_TIMERS */
 
-  /* Create the queue(s) */
-  /* creation of sensorDataQueue */
-  sensorDataQueueHandle = osMessageQueueNew (5, sizeof(ultrasonico), &sensorDataQueue_attributes);
+	/* Create the queue(s) */
+	/* creation of sensorDataQueue */
+	sensorDataQueueHandle = osMessageQueueNew (5, sizeof(SensorData_t), &sensorDataQueue_attributes);
 
-  /* creation of gpsDataQueue */
-  gpsDataQueueHandle = osMessageQueueNew (5, sizeof(GPS_Data_t), &gpsDataQueue_attributes);
+	/* creation of gpsDataQueue */
+	gpsDataQueueHandle = osMessageQueueNew (5, sizeof(GPS_Data_t), &gpsDataQueue_attributes);
 
-  /* creation of imuDataQueue */
-  imuDataQueueHandle = osMessageQueueNew (5, sizeof(uint16_t), &imuDataQueue_attributes);
+	/* creation of controlDataQueue */
+	controlDataQueueHandle = osMessageQueueNew (5, sizeof(ControlCommand_t), &controlDataQueue_attributes);
 
-  /* creation of controlDataQueue */
-  controlDataQueueHandle = osMessageQueueNew(5, sizeof(control_command), &controlDataQueue_attributes);
+	/* creation of navStatesQueue */
+	//navStatesQueueHandle = osMessageQueueNew (5, sizeof(evento_navegacion), &navStatesQueue_attributes);
 
-  /* creation of navStatesQueue*/
- // navStatesQueueHandle = osMessageQueueNew(5, sizeof(evento_navegacion), &navStatesQueue_attributes);
+	/* creation of hcsr04DataQueue */
+	hcsr04DataQueueHandle = osMessageQueueNew (5, sizeof(uint16_t), &hcsr04DataQueue_attributes);
 
-  /* USER CODE BEGIN RTOS_QUEUES */
+	/* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
+	/* USER CODE END RTOS_QUEUES */
 
-  /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+	/* Create the thread(s) */
+	/* creation of Navegacion */
+	//NavegacionHandle = osThreadNew(NavegacionTask, NULL, &Navegacion_attributes);
 
-  /* creation of Control */
-  ControlHandle = osThreadNew(ControlTask, NULL, &Control_attributes);
+	/* creation of Taquito */
+	TaquitoHandle = osThreadNew(TaquitoTask, NULL, &Taquito_attributes);
 
-  /* creation of Ultrasonido */
-  UltrasonidoHandle = osThreadNew(UltrasonicTask, NULL, &Ultrasonido_attributes);
+	/* creation of NavGlobal */
+	//NavGlobalHandle = osThreadNew(Navegacion_Global, NULL, &NavGlobal_attributes);
 
-  /* creation of Geoposicion */
-  GeoposicionHandle = osThreadNew(GPSTask, NULL, &Geoposicion_attributes);
+	/* creation of Control */
+	ControlHandle = osThreadNew(ControlTask, NULL, &Control_attributes);
 
-  /* creation of IMU */
-  IMUHandle = osThreadNew(IMUTask, NULL, &IMU_attributes);
+	/* creation of Ultrasonido */
+	UltrasonidoHandle = osThreadNew(UltrasonidoTask, NULL, &Ultrasonido_attributes);
 
-  /* creation of Transmision */
-  TransmisionHandle = osThreadNew(TransmisionTask, NULL, &Transmision_attributes);
+	/* creation of Geoposicion */
+	GeoposicionHandle = osThreadNew(GPSTask, NULL, &Geoposicion_attributes);
 
-  /* creation of Sensores_I2C */
-  Sensores_I2CHandle = osThreadNew(SensorsTask, NULL, &Sensores_I2C_attributes);
+	/* creation of Transmision */
+	TransmisionHandle = osThreadNew(TransmisionTask, NULL, &Transmision_attributes);
 
-  /*creation of Navegacion*/
- // navegacionHandle = osThreadNew(navegacion_Task,NULL,&navegacion_attributes);
+	/* creation of Sensores_I2C */
+	Sensores_I2CHandle = osThreadNew(SensoresTask, NULL, &Sensores_I2C_attributes);
 
-  /*creation of NavGlobal*/
-  //navGlobalHandle = osThreadNew(navGlobal_task,NULL,&navGlobal_attributes);
-
-  /*creation of Taquito*/
-  taquitoHandle = osThreadNew(navTaquito_task,NULL,&taquito_attributes);
-
-
-
-  /* USER CODE BEGIN RTOS_THREADS */
+	/* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
+	/* USER CODE END RTOS_THREADS */
 
-  /* USER CODE BEGIN RTOS_EVENTS */
+	/* USER CODE BEGIN RTOS_EVENTS */
 	/* add events, ... */
-
-
-  /* USER CODE END RTOS_EVENTS */
+	/* USER CODE END RTOS_EVENTS */
 
 }
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_NavegacionTask */
 /**
- * @brief  Function implementing the defaultTask thread.
+ * @brief  Function implementing the Navegacion thread.
  * @param  argument: Not used
  * @retval None
  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+/* USER CODE END Header_NavegacionTask */
+void NavegacionTask(void *argument)
 {
-  /* USER CODE BEGIN StartDefaultTask */
+	/* USER CODE BEGIN NavegacionTask */
 	/* Infinite loop */
 	for(;;)
 	{
 		osDelay(1);
 	}
-  /* USER CODE END StartDefaultTask */
+	/* USER CODE END NavegacionTask */
+}
+
+/* USER CODE BEGIN Header_TaquitoTask */
+/**
+ * @brief Function implementing the Taquito thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_TaquitoTask */
+void TaquitoTask(void *argument)
+{
+	/* USER CODE BEGIN TaquitoTask */
+	/* Infinite loop */
+	for(;;)
+	{
+		osDelay(1);
+	}
+	/* USER CODE END TaquitoTask */
+}
+
+/* USER CODE BEGIN Header_Navegacion_Global */
+/**
+ * @brief Function implementing the NavGlobal thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_Navegacion_Global */
+void Navegacion_Global(void *argument)
+{
+	/* USER CODE BEGIN Navegacion_Global */
+	/* Infinite loop */
+	for(;;)
+	{
+		osDelay(1);
+	}
+	/* USER CODE END Navegacion_Global */
 }
 
 /* USER CODE BEGIN Header_ControlTask */
@@ -331,69 +394,136 @@ void StartDefaultTask(void *argument)
 /* USER CODE END Header_ControlTask */
 void ControlTask(void *argument)
 {
-	osStatus_t status;
-	control_command control_instruction;
-  /* USER CODE BEGIN ControlTask */
-	/* Infinite loop */
-	for(;;)
-	{
-	//	Serial_PrintString("Tarea de control... ");
-		/*Rover_Move(&Rover, ROVER_FORWARD, 400, 5000);
-		Rover_Move(&Rover, ROVER_STOP, 400, 5000);
-		Rover_Move(&Rover, ROVER_BACKWARD, 400, 5000);*/
-		status=osMessageQueueGet(controlDataQueueHandle, &control_instruction, NULL, 10);
-		if(status==osOK){
-			Rover_Move(&Rover, control_instruction.direccion, control_instruction.velocidad, control_instruction.tiempo);
-			//Serial_PrintString("datos de control recibidos...");
-	/*		if(control_instruction.direccion==ROVER_FORWARD){
-				Serial_PrintString("\nMoverse hacia adelante");
-			}
-			else if(control_instruction.direccion==ROVER_RIGHT){
-				Serial_PrintString("\nMoverse hacia la derecha");
-			}
-			else if(control_instruction.direccion==ROVER_LEFT){
-				Serial_PrintString("\nMoverse hacia la izquierda");
-			}
-			else if(control_instruction.direccion==ROVER_BACKWARD){
-				Serial_PrintString("\nMoverse hacia atras");
-			}*/
+    PoseController_t pose_ctrl;
+    PoseController_Init(&pose_ctrl);
 
+    GPS_Data_t gps_data;
+    ControlCommand_t cmd;
+    osStatus_t status;
+
+    // Variables de trabajo para el control
+	float vx_cmd = 0.0f;
+	float wz_cmd = 0.0f;
+
+    // Target inicial (hardcoded para prueba)
+  /*  float target_x = 10.0f;  // 10 metros al norte
+    float target_y = 0.0f;*/
+
+    for(;;)
+    {
+        // 1. Leer GPS actual
+        status = osMessageQueueGet(gpsDataQueueHandle, &gps_data, NULL, 10);
+        if (status != osOK) continue;
+
+        // Intentar leer un comando de la cola de Taquito (no bloqueante, timeout 0)
+        status = osMessageQueueGet(controlDataQueueHandle, &cmd, NULL, 0);
+        if (status != osOK) continue;
+
+        // 2. Convertir GPS a coordenadas locales (usar gpsACartesiano)
+        P_Cartesiano pos_actual = gpsACartesiano(estacionTerrena, &gps_data);
+
+        // 3. Obtener orientación (temporalmente de GPS course)
+        float theta_actual = deg2rad(gps_data.course);
+
+        // 3. SELECCIÓN DE LÓGICA DE CONTROL BASADA EN EL MODO
+		switch (cmd.mode)
+		{
+			case MODE_WALL_FOLLOW: //control PID para el seguimiento de pared
+				// Taquito ya calculó el PID lateral y dio el vx y wz (corrección)
+				vx_cmd = cmd.target_vx;
+				wz_cmd = cmd.target_wz;
+
+				// Resetear el PID de pose (para que no interfiera)
+				PoseController_Reset(&pose_ctrl);
+				break;
+
+			case MODE_POSE_GIRO: //pendiente de ajustar, es para los giros de 90°
+				// Giro de 90 grados:
+				// 1. Usamos el PID angular de PoseController
+				PoseController_Update_Theta(&pose_ctrl,
+											pos_actual.theta,
+											cmd.target_theta);
+
+				// 2. Tomamos el wz del controlador angular y forzamos vx=0
+				vx_cmd = 0.0f;
+				wz_cmd = pose_ctrl.wz_cmd;
+
+				// Lógica de finalización (debe estar aquí o en PoseController_Update_Theta)
+				// if (fabsf(theta_actual - cmd.target_theta) < THETA_TOLERANCE) {
+				//     // Notificar a Taquito y cambiar el modo de control.
+				// }
+				break;
+
+			case MODE_POSE_TARGET: //la logica que ya se tenia, avanza hacia un target x,y
+				// Comportamiento de control de pose original (ir a X, Y)
+				PoseController_Update(&pose_ctrl,
+									 pos_actual.x, pos_actual.y, theta_actual,
+									 cmd.target_x, cmd.target_y); // Usar targets del comando
+
+				vx_cmd = pose_ctrl.vx_cmd;
+				wz_cmd = pose_ctrl.wz_cmd;
+				break;
+
+			case MODE_FORWARD:
+				//avance "en bruto" desde taquito
+				vx_cmd = cmd.target_vx;
+				wz_cmd = cmd.target_wz;
+				break;
 		}
 
-		osDelay(1000); //delay para las pruebas unicamente
-	}
-  /* USER CODE END ControlTask */
+
+        // 5. Cinemática inversa
+        WheelVelocities_t wheels = Kinematics_Inverse(vx_cmd,
+                                                      wz_cmd);
+
+        // 6. Modelo PWM
+        PWM_Mapping_t pwm_right = PWM_VelocityToPWM(wheels.vR_cmd, 1);
+        PWM_Mapping_t pwm_left = PWM_VelocityToPWM(wheels.vL_cmd, 0);
+
+        // 7. Aplicar PWM
+        Rover_SetPWM(&Rover, pwm_right.pwm_duty, pwm_left.pwm_duty);
+
+        osDelay(50);  // Control a 20Hz
+    }
 }
 
-/* USER CODE BEGIN Header_UltrasonicTask */
+/* USER CODE BEGIN Header_UltrasonidoTask */
 /**
  * @brief Function implementing the Ultrasonido thread.
  * @param argument: Not used
  * @retval None
  */
-/* USER CODE END Header_UltrasonicTask */
-__weak void UltrasonicTask(void *argument)
+/* USER CODE END Header_UltrasonidoTask */
+void UltrasonidoTask(void *argument)
 {
-  /* USER CODE BEGIN UltrasonicTask */
-	//HCSR04_Data_t local_data;
-	ultrasonico local_data_t;
-	local_data_t.frontal.distance_cm=30;
-	local_data_t.izquierdo.distance_cm=30;
-	local_data_t.derecho.distance_cm=30;
+	/* USER CODE BEGIN UltrasonidoTask */
+
+	HCSR04_Data_t data_ultrasonico;
+
 	/* Infinite loop */
 	for(;;)
 	{
-//		Serial_PrintString("Tarea de HCSR04... ");
-		// Leer sensor
-	//	if (HCSR04_ReadDistance(&local_data) == HAL_OK) {
-			// Enviar datos a la queue
-			osMessageQueuePut(sensorDataQueueHandle, &local_data_t, 0, 0);
-	//	}
-
-		// Esperar 1 s entre mediciones
-		osDelay(1000);
+		// 1. Llama a la función de lectura.
+		// Esta función bloqueará la tarea (espera el semáforo)
+		// hasta que la interrupción del timer reciba el eco.
+		HAL_StatusTypeDef status = HCSR04_ReadDistance(&data_ultrasonico);
+		// 2. Comprobar si la lectura fue exitosa
+		if (status == HAL_OK)
+		{
+			// 3. Imprimir el dato usando la función de Serial.c
+			// Esta función ya comprueba si data.is_valid
+			Serial_PrintHCSR04Data(&data_ultrasonico);
+		}
+		else
+		{
+			// 4. (Opcional) Imprimir si hubo un error (timeout)
+			//Serial_PrintString("[Ultrasonico] Error: Timeout (eco no recibido)\r\n");
+		}
+		// 5. Esperar antes de la próxima medición
+		// No medir demasiado rápido para evitar ecos fantasmas.
+		osDelay(200); // 5 lecturas por segundo es más que suficiente.
 	}
-  /* USER CODE END UltrasonicTask */
+	/* USER CODE END UltrasonidoTask */
 }
 
 /* USER CODE BEGIN Header_GPSTask */
@@ -403,71 +533,31 @@ __weak void UltrasonicTask(void *argument)
  * @retval None
  */
 /* USER CODE END Header_GPSTask */
-__weak void GPSTask(void *argument)
+void GPSTask(void *argument)
 {
-  /* USER CODE BEGIN GPSTask */
+	/* USER CODE BEGIN GPSTask */
 	GPS_Data_t local_gps_data;
-/*	local_gps_data.altitude = 1000;
-	local_gps_data.is_valid = 1;
-	local_gps_data.latitude = 45.53;
-	local_gps_data.longitude = 76.89;*/
+
 	/* Infinite loop */
 	for(;;)
 	{
-		Serial_PrintString("Tarea de GPS... ");
-		// Procesar datos GPS recibidos
-		/*comentar para las pruebas y poder quemar datos*/
 		GPS_ProcessData();
-		//gps_data_ready = 1;
-		/*fin comentar para las pruebas y poder quemar datos*/
+		if (gps_data_ready) {
+			// Copiar datos globales a local
+			memcpy(&local_gps_data, &g_gps_data, sizeof(GPS_Data_t));
 
-		// Si hay datos GPS listos, enviarlos a la queue
-		if (gps_data_ready)
-		{
-			// Copiar datos GPS globales a variable local
-			memcpy(&g_gps_data, &local_gps_data, sizeof(GPS_Data_t));
-
-			// Enviar a la queue (sin bloqueo)
+			// Enviar a cola para otras tareas
 			osMessageQueuePut(gpsDataQueueHandle, &local_gps_data, 0, 0);
-			Serial_PrintGPSData(&local_gps_data);
+
+			// Imprimir para debug
+			GPS_PrintData(&local_gps_data);
 
 			// Limpiar bandera
 			gps_data_ready = 0;
 		}
-
-		// Procesar cada 100ms
-		osDelay(1000); //delay de 1000 para las pruebas, origiinal es solo 100
+		osDelay(100);
 	}
-  /* USER CODE END GPSTask */
-}
-
-/* USER CODE BEGIN Header_IMUTask */
-/**
- * @brief Function implementing the IMU thread.
- * @param argument: Not used
- * @retval None
- */
-/* USER CODE END Header_IMUTask */
-__weak void IMUTask(void *argument)
-{
-  /* USER CODE BEGIN IMUTask */
-	MPU9250_Data local_IMU_data;
-	BMP280_t bmp;
-	/* Infinite loop */
-	for(;;)
-	{
-		Serial_PrintString("Tarea de IMU... ");
-		if(MPU9250_ReadAll(&local_IMU_data) || BMP280_Read(&bmp, &local_IMU_data) == HAL_OK)
-		{
-			osMessageQueuePut(imuDataQueueHandle, &local_IMU_data, 0, 0);
-		}
-
-
-
-		osDelay(1000); //delay de 1000 para las pruebas, origiinal es solo 100
-
-	}
-  /* USER CODE END IMUTask */
+	/* USER CODE END GPSTask */
 }
 
 /* USER CODE BEGIN Header_TransmisionTask */
@@ -477,66 +567,82 @@ __weak void IMUTask(void *argument)
  * @retval None
  */
 /* USER CODE END Header_TransmisionTask */
-__weak void TransmisionTask(void *argument)
+void TransmisionTask(void *argument)
 {
-  /* USER CODE BEGIN TransmisionTask */
-	HCSR04_Data_t received_ultrasonic_data;
-	GPS_Data_t received_gps_data;
-	MPU9250_Data received_imu_data;
-	osStatus_t status;
+	/* USER CODE BEGIN TransmisionTask */
 	/* Infinite loop */
 	for(;;)
 	{
-		Serial_PrintString("Tarea de transmision... ");
-	/*	status = osMessageQueueGet(sensorDataQueueHandle, &received_ultrasonic_data, NULL, 10);
-		if (status == osOK)
-		{
-			// Imprimir datos del ultrasonido
-			Serial_PrintHCSR04Data(&received_ultrasonic_data);
-			g_hcsr04_data = received_ultrasonic_data;
-		}
-*/
-
-		/*status = osMessageQueueGet(gpsDataQueueHandle, &received_gps_data, NULL, 10);
-		if (status == osOK)
-		{
-			// Imprimir datos GPS
-			Serial_PrintGPSData(&received_gps_data);
-		}*/
-		/*
-		status = osMessageQueueGet(imuDataQueueHandle, &received_imu_data, NULL, 10);
-		if (status == osOK)
-		{
-			Serial_PrintIMUData(&received_imu_data);
-		}
-*/
-		// Si no hay datos disponibles, esperar un poco
-		if (osMessageQueueGetCount(sensorDataQueueHandle) == 0 &&
-				osMessageQueueGetCount(gpsDataQueueHandle) == 0)
-		{
-			osDelay(50);
-		}
-		osDelay(2000);
+		osDelay(1);
 	}
-  /* USER CODE END TransmisionTask */
+	/* USER CODE END TransmisionTask */
 }
 
-/* USER CODE BEGIN Header_SensorsTask */
+/* USER CODE BEGIN Header_SensoresTask */
 /**
  * @brief Function implementing the Sensores_I2C thread.
  * @param argument: Not used
  * @retval None
  */
-/* USER CODE END Header_SensorsTask */
-__weak void SensorsTask(void *argument)
+/* USER CODE END Header_SensoresTask */
+void SensoresTask(void *argument)
 {
-  /* USER CODE BEGIN SensorsTask */
+	/* USER CODE BEGIN SensoresTask */
+	Sensors_I2C_Handle_t hsensors = {0};
+	LoRa_t lora_module;
+
+	if (Sensors_I2C_Init(&hsensors, &hi2c1)==HAL_OK)
+	{
+		Serial_PrintString("Sensores I2C Inicializados \n\r");
+	}
+	else
+	{
+		Serial_PrintString("No se logró inicializar los sensores \n\r");
+	}
+	LoRa_Init(&lora_module, &huart1);
+	LoRa_Setup(&lora_module,
+			"1",  // Dirección del dispositivo
+			"18", // ID de Red
+			"915000000"); // Banda (ej. 915 MHz)
+
 	/* Infinite loop */
 	for(;;)
 	{
-		osDelay(1); // Destinada a todos los del I2C
+		// 1. Leer Temperatura y Humedad
+		HDC1080_Read(&hsensors);
+
+		// 2. Enviar datos de T/H al CCS811 para compensación
+		CCS811_WriteEnvData(&hsensors, hsensors.data.temperature, hsensors.data.humidity);
+
+		// 3. Leer Calidad de Aire (ahora compensada)
+		CCS811_Read(&hsensors);
+
+		// 4. Leer el resto de sensores
+		MPU6050_Read(&hsensors);
+		LTR390_Read(&hsensors);
+
+		char msg[128];
+
+		// ----- MODIFICACIÓN DEL SNPRINTF -----
+		snprintf(msg, sizeof(msg),
+				"%.1f,%.1f,%u,%u,%.2f,%.2f,%.2f,%.1f",
+				hsensors.data.temperature,
+				hsensors.data.humidity,
+				hsensors.data.eco2,
+				hsensors.data.tvoc,
+				hsensors.data.accel[0],
+				hsensors.data.accel[1],
+				hsensors.data.accel[2],
+				hsensors.data.light); // Volvemos a imprimir el valor float
+
+		char cmd[160];
+		snprintf(cmd, sizeof(cmd), "AT+SEND=0,%d,%s\r\n", (int)strlen(msg), msg);
+		Serial_PrintString(cmd);
+		osDelay(200);
+
 	}
-  /* USER CODE END SensorsTask */
+
+	/* USER CODE END SensoresTask */
 }
 
 /* Private application code --------------------------------------------------*/

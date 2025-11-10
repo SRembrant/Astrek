@@ -6,6 +6,7 @@
  */
 
 #include "Gases.h"
+#include <string.h>
 
 /* Private function prototypes */
 static CCS811_Status_t CCS811_WriteRegister(CCS811_Handle_t *handle, uint8_t reg, uint8_t *data, uint8_t len);

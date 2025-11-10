@@ -11,12 +11,16 @@
 #include "main.h"
 #include "cmsis_os.h"
 
+#include "Control_Pose.h"
 #include "Taquito.h"
 #include "Navegacion.h" //libreria de funciones de navegacion
 #include "Serial.h"
 #include "sr04.h"
 
 // --- Funciones auxiliares (Propias de taquito) ---
+
+// Variable estática para el controlador de pared dentro del archivo taquito.c
+static WallFollow_Controller_t wall_ctrl;
 
 /*
  * @brief si el rover esta dentro de un intervalo permitido, no hace ajustes de pared
@@ -42,31 +46,43 @@ static float hayPared(float disLateral){
 
 /*
  * @brief ajustarPared hace ajustes sobre el rumbo local del rover para continuar con
- *                     el wall following
+ * el wall following
  * @param direccion Es un valor -1 o 1, indica que pared esta siguiendo el rover
- *                  1 para la pared izquierda, -1 para la pared derecha
+ * 1 para la pared izquierda, -1 para la pared derecha
+ * @param disLateral Distancia lateral medida (cm)
+ * @return float Velocidad angular de corrección (wz_correction)
  */
-static void ajustarPared(int8_t direccion, float disLateral){
-	//validamos si estamos siguiendo una pared o una grieta
-	if(disLateral>=umbral_grieta) return; // si es una grieta, no hay como hacer ajustes
-	float existePared = hayPared(disLateral);
-	if(existePared==0) return;
-	else if(existePared<0){
-		if(direccion == 1){
-			//giro hacia la derecha proporcional al valor de retorno
-		}
-		else{
-			//giro hacia la izquierda proporcional al valor de retorno
-		}
-	}
-	else if(existePared>0){
-		if(direccion == 1){
-			//giro hacia la izquierda proporcional al valor de retorno
-		}
-		else{
-			//giro hacia la derecha proporcional al valor de retorno
-		}
-	}
+static float ajustarPared(int8_t direccion, float disLateral_cm){
+	// No hacemos ajustes si estamos en modo grieta.
+	if(disLateral_cm >= umbral_grieta) {
+        PID_Reset(&wall_ctrl.pid_wall);
+        return 0.0f;
+    }
+
+    // Convertir a metros, que es la unidad estándar del sistema
+    float disLateral_m = disLateral_cm / 100.0f;
+
+    // Calcular el error: (Distancia Medida - Distancia Deseada)
+    // Error positivo = muy lejos; Error negativo = muy cerca.
+    float error = disLateral_m - wall_ctrl.dist_lateral_deseada;
+
+    // Calcular la corrección angular (wz_correction) usando el PID
+    float wz_correction = PID_Update(&wall_ctrl.pid_wall, error, POSE_CONTROL_DT);
+
+    // La salida del PID es 'wz' para corregir, pero el signo debe reflejar
+    // la pared que se está siguiendo.
+    // Error (+) (Lejos) -> Pared DERECHA (-1): wz debe ser NEGATIVO (girar a la derecha)
+    // Error (+) (Lejos) -> Pared IZQUIERDA (+1): wz debe ser POSITIVO (girar a la izquierda)
+
+    // Se invierte la corrección para la pared derecha
+    if (direccion == -1) { // Pared Derecha
+        wz_correction = -wz_correction;
+    }
+    // Si direccion == 1 (Pared Izquierda), se mantiene el signo (más lejos -> más positivo wz)
+
+    // La función que llama a ajustarPared deberá usar este wz_correction para el rover
+
+    return wz_correction;
 }
 
 
@@ -157,9 +173,9 @@ void navTaquito_task(void *argument){
 		static estado estadoTaq = NUEVO_TAQUITO;
 
 		//varables de comunicacion
-		evento_navegacion evento;
+	//	evento_navegacion evento;
 		static osStatus_t status;
-		static control_command comunicacionControl_t;
+		static ControlCommand_t cmd;
 		static ultrasonico distancias; //ultrasonico es una estructura que guarda los 3 sensores. hablar esto con joad
 		//static HCSR04_Data_t received_ultrasonic_data; //-- variable de la prueba de comunicacion entre tareas, ultra-->taq,, Prueba 1. Despues reemplazar por la linea de arriba
 
@@ -175,6 +191,19 @@ void navTaquito_task(void *argument){
 		float heading; //heading del rover respecto al norte
 		float diff; //diferencia entre el bearing y el heading
 
+		//
+		wall_ctrl.dist_lateral_deseada = dist_objetivo;
+
+		    // Ganancias PID para el ajuste de pared (ejemplo de ajuste)
+		    // Se recomienda que sea un P o PI con una Kp dominante
+		    PID_Init(&wall_ctrl.pid_wall,
+		             0.5f,     // Kp (Respuesta directa al error de distancia)
+		             0.0f,     // Ki (Puede introducir inestabilidad, empezar en 0)
+		             0.05f,    // Kd (Para amortiguar giros bruscos)
+		             0.1f,     // Integral max (anti-windup)
+		             -POSE_MAX_ANGULAR_VELOCITY,
+					 POSE_MAX_ANGULAR_VELOCITY);
+
 	for(;;){
 		Serial_PrintString("Nav taquito en ejecucion...");
 		switch(estadoTaq)
@@ -187,46 +216,16 @@ void navTaquito_task(void *argument){
 						estadoTaq = NUEVO_TAQUITO;
 					}
 					else{
-						comunicacionControl_t.direccion = ROVER_FORWARD;
-						comunicacionControl_t.tiempo =100;
-						comunicacionControl_t.velocidad = 200;
-						status = osMessageQueuePut(controlDataQueueHandle, &comunicacionControl_t, 0, 10);
-						estadoTaq = AJUSTE;
+
+						// solo hay que mandar una estrcutura con la poscion actual x,y y el heading.
+						cmd.mode = MODE_POSE_TARGET;
+						cmd.target_x = 0.0; //si en la conversion del controlTask se usa la estacion terrena como orige su referenciia cartesiana siempre sera (0,0)
+						cmd.target_y = 0.0;
+						status = osMessageQueuePut(controlDataQueueHandle, &cmd, 0, 10);
 					}
 				}
 				break;
-			case AJUSTE:
-				/*Aqui hay que mirar con los codigos nuevos como se recibe el heading. Para determiinar como hacer el algoritmo
-				 *
-				 *
-				 * si alguna de las dos lecturas, gps o headig, es invalida, solo sigue avanzando
-				 * solo hace calculos de ajuste cuando Bearing y Heading son valores validos. El detalle esta
-				 * en evitar que haga calculos si alguna de esas dos variables no se pudo calcular
-				 *
-				 * algoriitmo de ajuste
-				 *
-				 * 1. calcula bearing
-				 * 2. calcula heading
-				 * 3. calcula diff
-				 * 4 si diff > a angle-tolerance hacer
-				 * 		4.1 comandos a control para ajustar el rumbo
-				 * 	 finsi
-				 * 5. estado = AVANCE
-				 * */
 
-				status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
-				if(status == osOK)
-				{
-					bearing = calculate_bearing(&posActual, estacionTerrena); //calculamos el bearing
-				}
-				//recibir datos del IMU para el heading o del GPS con el campo course y repetir el if anterior
-				if(status == osOK)
-				{
-					//se puede continuar
-				}
-
-				estadoTaq = AVANCE;
-				break;
 			case NUEVO_TAQUITO:
 				status = osMessageQueueGet(gpsDataQueueHandle, &inicioTaquito, NULL, osWaitForever);
 				if(status==osOK){
@@ -294,13 +293,17 @@ void navTaquito_task(void *argument){
 						contEsqExt = 0;
 						if(paredASeguir==-1) disLateral = distancias.derecho.distance_cm;
 						else disLateral = distancias.izquierdo.distance_cm;
-						ajustarPared(distRecta, disLateral);
 
-						//mandar comandos de control a control
-						comunicacionControl_t.direccion = ROVER_FORWARD;
-						comunicacionControl_t.velocidad = 500;
-						comunicacionControl_t.tiempo=10;
-						status = osMessageQueuePut(controlDataQueueHandle, &comunicacionControl_t, 0, 10);
+						// 2. Calcular la corrección angular con el PID
+						float wz_cmd_correction = ajustarPared(paredASeguir, disLateral);
+
+						// 3. Crear Comando Cinémativo para ControlTask
+
+						cmd.mode = MODE_WALL_FOLLOW;
+						cmd.target_vx = WALL_FOLLOW_VX_BASE; // Velocidad de avance constante
+						cmd.target_wz = wz_cmd_correction;       // Corrección angular del PID lateral
+						// (Otros campos no son necesarios para este modo)
+						status = osMessageQueuePut(controlDataQueueHandle, &cmd, 0, 10);
 						//Rover_Move(Rover, ROVER_FORWARD, 500);
 					}
 					break;
@@ -412,27 +415,20 @@ void navTaquito_task(void *argument){
 
 				}
 
-				evento = ERROR_DESCONOCIDO;
-				osMessageQueuePut(navStatesQueueHandle,&evento, 0, 0);
-				estadoTaq = NUEVO_TAQUITO;
-				//vTaskSuspend(NULL);
-				osThreadResume(navegacionHandle);
-				osThreadSuspend(osThreadGetId());
+				estadoTaq = AVANCE;
+
 				//de no haber espacio suficiente, simplemente rompe tod y hace relocalizacion con navGlobal
 				break;
 
 			default:
-				evento = ERROR_DESCONOCIDO;
-				osMessageQueuePut(navStatesQueueHandle,&evento, 0, 0);
-				estadoTaq = NUEVO_TAQUITO;
-				//vTaskSuspend(NULL);
-				osThreadResume(navegacionHandle);
-				osThreadSuspend(osThreadGetId());
+
+				estadoTaq = AVANCE;
+
 				break;
 		}
 
 		//Antes del if otro if verficando que este en ajuste o avance para no entrar a estado fin, fin
-		if(estadoTaq != AVANCE && estadoTaq != AJUSTE)
+		if(estadoTaq != AVANCE)
 		{
 			//revisamos si ya cruzamos o no la recta, mientras no la hayams cruzado, seguimos siguiendo la pared
 			status = osMessageQueueGet(gpsDataQueueHandle, &posActual, NULL, 10);
@@ -443,13 +439,7 @@ void navTaquito_task(void *argument){
 				if(cruce)
 				{
 					//la proxima ejecucion de taquito se reinicia el algoritmo
-					estadoTaq = NUEVO_TAQUITO;
-					//comunicamos con el selector que se completo taquito correctamente
-					evento = OBSTACULO_RODEADO;
-					osMessageQueuePut(navStatesQueueHandle,&evento, 0, 0);
-					//le cedemos el control al selector
-					osThreadResume(navegacionHandle);
-					osThreadSuspend(osThreadGetId());
+					estadoTaq = AVANCE;
 				}
 			}
 		}

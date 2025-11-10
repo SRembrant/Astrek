@@ -186,7 +186,7 @@ HAL_StatusTypeDef BMP280_Read(BMP280_t *bmp, MPU9250_Data *data) {
     return HAL_OK;
 }
 
-//Immplementacion del filtro de calman
+//Immplementacion del filtro de kalman
 
 
 static KalmanFilter kf_accel_x, kf_accel_y, kf_accel_z;
